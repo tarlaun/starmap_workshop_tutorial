@@ -100,7 +100,11 @@ The default map will appear unstyled (gray polygons).
 To make it informative:
 1. Open [map.html](map/html)
 2. Insert styling code into the LLM styling block  
-3. Use the prompt in [prompt_styling.txt](prompt_styling.txt) to generate styling  
+3. Use the prompt in [prompt_styling.txt](prompt_styling.txt) to generate styling
+
+This will generate a full html file that you can replace with map.html. 
+
+Alternatively, you can paste in the styling code below in the specified styling block in map.html and refresh it to see the stylized visualization.
 
 ### Example Styled Output
 

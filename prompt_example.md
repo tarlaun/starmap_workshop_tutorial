@@ -13,7 +13,7 @@ Use OSM as base map. Make sure the base map is seamless integrated in the visual
   source: new ol.source.OSM()
 });
 
-Default Dataset: TIGER2018_COUNTY
+Default Dataset: Parks_DominantVeg
 
 Target Container ID: map
 
@@ -24,39 +24,10 @@ STEP 2: DATA SCHEMA (MVT METADATA)
 Source Layer Name: (Generic/Not specified in code, but uses standard MVT format).
 
 Fields/Attributes: * geometry: The shapes (Polygons/Points) included in the MVT tiles.
- STATEFP
+ dominant_vegetation
 (string)
- COUNTYFP
+PARK_NAME
 (string)
- COUNTYNS
-(string)
- GEOID
-(string)
- NAME
-(string)
- NAMELSAD
-(string)
- LSAD
-(string)
- CLASSFP
-(string)
- MTFCC
-(string)
- CSAFP
-(string)
- CBSAFP
-(string)
- METDIVFP
-(string)
- FUNCSTAT
-(string)
- ALAND
-(integer)
- AWATER
-(integer)
- INTPTLAT
-(string)
- INTPTLON
 (Note: No specific property filtering is used, just global styling for all features.)
 
 STEP 3: VISUALIZATION & UI GOALS (Natural Language)

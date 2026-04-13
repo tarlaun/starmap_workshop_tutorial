@@ -30,7 +30,7 @@ To generate a script that combines:
 - Riverside_VegetationTypes.geojson
 
 Send the prompt in [prompt_data_comp.txt](prompt_data_comp.txt) to your LLM.  
-It should return a script similar to [data_comp.py](data_comp.py).
+It should return a script, save this script as data_comp.py 
 
 Then run:
 

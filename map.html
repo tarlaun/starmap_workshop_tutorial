@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Starlet Workshop Map (MapLibre)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link
+    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+    rel="stylesheet"
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    #panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      background: rgba(255,255,255,0.96);
+      padding: 12px 14px;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      max-width: 380px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    #panel h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      color: #1a4a7a;
+    }
+
+    #panel p {
+      margin: 0 0 8px;
+      color: #555;
+      font-size: 12px;
+    }
+
+    #status {
+      font-size: 11px;
+      color: #666;
+      margin-top: 6px;
+      white-space: pre-line;
+    }
+
+    #legend {
+      margin-top: 10px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    #legend h4 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      color: #444;
+    }
+
+    .legend-swatch {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.2);
+    }
+
+    #tooltip {
+      position: absolute;
+      z-index: 20;
+      pointer-events: none;
+      background: rgba(255,255,255,0.96);
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: none;
+      max-width: 260px;
+      line-height: 1.5;
+    }
+
+    #tooltip strong {
+      color: #1a4a7a;
+    }
+
+    .code-note {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e5e5e5;
+      font-size: 11px;
+      color: #666;
+    }
+
+    code {
+      background: #f3f3f3;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h3 id="title">Dataset</h3>
+    <p id="subtitle">Vector tiles served by Starlet</p>
+    <div id="status">Loading configuration…</div>
+
+    <div id="legend">
+      <h4>Legend</h4>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: rgba(0,0,0,0.12);"></span>
+        <span>Default geometry style</span>
+      </div>
+    </div>
+
+    <div class="code-note">
+      This template auto-detects the MVT <code>source-layer</code> by reading a sample tile.
+      Students should mainly edit the styling block.
+    </div>
+  </div>
+
+  <div id="map"></div>
+  <div id="tooltip"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <script type="module">
+    import Pbf from "https://esm.sh/pbf@4.0.1";
+    import { VectorTile } from "https://esm.sh/@mapbox/vector-tile@2.0.4";
+
+    // ============================================================
+    // WORKSHOP SETTINGS
+    // ============================================================
+
+    // Choose the tile URL pattern that matches your server output.
+    // Use ONLY ONE of these.
+    function buildTileUrl(dataset) {
+      return `${window.location.origin}/datasets/${dataset}/mvt/{z}/{x}/{y}.mvt`;
+    }
+
+    // function buildTileUrl(dataset) {
+    //   return `${window.location.origin}/datasets/${dataset}/mvt/tile-{z}-{x}-{y}.mvt`;
+    // }
+
+    // Probe zoom used for source-layer detection.
+    // Lower values are often more reliable because they need fewer tiles.
+    const PROBE_ZOOMS = [8, 7, 6, 5, 4, 3, 2, 1, 0];
+
+    // ============================================================
+    // SHARED STATE
+    // ============================================================
+
+    const seenLegendValues = new Set();
+    let currentSourceLayer = null;
+
+    // ============================================================
+    // EDITABLE STYLING BLOCK
+    // Students should mainly edit this part.
+    // ============================================================
+
+    function getCategory(properties) {
+      return "Default geometry style";
+    }
+
+    function updateLegend() {
+      const legendEl = document.getElementById("legend");
+      if (!legendEl) return;
+
+      legendEl.innerHTML = `
+        <h4>Legend</h4>
+        <div class="legend-row">
+          <span class="legend-swatch" style="background: rgba(0,0,0,0.12);"></span>
+          <span>Default geometry style</span>
+        </div>
+      `;
+    }
+
+    function addThematicLayers(map, sourceId, sourceLayer) {
+      map.addLayer({
+        id: "theme-fill",
+        type: "fill",
+        source: sourceId,
+        "source-layer": sourceLayer,
+        paint: {
+          "fill-color": "#000000",
+          "fill-opacity": 0.12
+        }
+      });
+
+      map.addLayer({
+        id: "theme-outline",
+        type: "line",
+        source: sourceId,
+        "source-layer": sourceLayer,
+        paint: {
+          "line-color": "#000000",
+          "line-width": 1.2
+        }
+      });
+    }
+
+    // ============================================================
+    // TILE / SOURCE-LAYER DISCOVERY HELPERS
+    // ============================================================
+
+    function lonLatToTile(lon, lat, z) {
+      const x = Math.floor(((lon + 180) / 360) * Math.pow(2, z));
+      const latRad = lat * Math.PI / 180;
+      const y = Math.floor(
+        (
+          (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2
+        ) * Math.pow(2, z)
+      );
+      return { x, y };
+    }
+
+    function fillTileUrl(template, z, x, y) {
+      return template
+        .replace("{z}", String(z))
+        .replace("{x}", String(x))
+        .replace("{y}", String(y));
+    }
+
+    function pickBestLayerName(layerNames, dataset) {
+      if (!layerNames.length) return null;
+
+      if (layerNames.includes("default")) return "default";
+      if (dataset && layerNames.includes(dataset)) return dataset;
+      if (layerNames.includes("layer0")) return "layer0";
+
+      return layerNames[0];
+    }
+
+    async function fetchTileLayerNames(tileUrl) {
+      const response = await fetch(tileUrl);
+      if (!response.ok) {
+        throw new Error(`Tile fetch failed (${response.status})`);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      const arrayBuffer = await response.arrayBuffer();
+
+      // Many servers return application/x-protobuf or application/vnd.mapbox-vector-tile.
+      // We parse the bytes directly regardless of exact MIME string.
+      const tile = new VectorTile(new Pbf(new Uint8Array(arrayBuffer)));
+      return Object.keys(tile.layers || {});
+    }
+
+    async function detectSourceLayer(dataset, bbox, tileUrlTemplate, maxZoom) {
+      const centerLon = bbox && bbox.length === 4 ? (bbox[0] + bbox[2]) / 2 : -117.37;
+      const centerLat = bbox && bbox.length === 4 ? (bbox[1] + bbox[3]) / 2 : 33.95;
+
+      const zoomCandidates = [];
+      for (const z of PROBE_ZOOMS) {
+        if (z <= maxZoom) zoomCandidates.push(z);
+      }
+      if (!zoomCandidates.length) zoomCandidates.push(Math.min(maxZoom, 8));
+
+      const attempts = [];
+
+      for (const z of zoomCandidates) {
+        const { x, y } = lonLatToTile(centerLon, centerLat, z);
+        const tileUrl = fillTileUrl(tileUrlTemplate, z, x, y);
+
+        try {
+          const layerNames = await fetchTileLayerNames(tileUrl);
+          if (layerNames.length) {
+            return {
+              sourceLayer: pickBestLayerName(layerNames, dataset),
+              layerNames,
+              probeUrl: tileUrl,
+              probeZ: z,
+              probeX: x,
+              probeY: y
+            };
+          }
+          attempts.push(`z${z}: no layers found`);
+        } catch (err) {
+          attempts.push(`z${z}: ${err.message}`);
+        }
+      }
+
+      throw new Error("Could not detect source-layer.\n" + attempts.join("\n"));
+    }
+
+    // ============================================================
+    // MAIN
+    // ============================================================
+
+    async function main() {
+      const statusEl = document.getElementById("status");
+      const titleEl = document.getElementById("title");
+      const tooltipEl = document.getElementById("tooltip");
+
+      const configResponse = await fetch("./config.json");
+      if (!configResponse.ok) {
+        throw new Error(`Could not load config.json (${configResponse.status})`);
+      }
+
+      const config = await configResponse.json();
+
+      const dataset = config.dataset;
+      const bbox = config.bbox;
+      const maxZoom = config.max_zoom ?? 10;
+
+      if (!dataset) {
+        throw new Error("config.json is missing the 'dataset' field.");
+      }
+
+      titleEl.textContent = dataset;
+
+      const tileUrlTemplate = buildTileUrl(dataset);
+
+      statusEl.textContent =
+        `Loading map…\n` +
+        `Dataset: ${dataset}\n` +
+        `Probing one sample tile to detect source-layer…`;
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: [
+                "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              ],
+              tileSize: 256,
+              attribution: "&copy; OpenStreetMap contributors"
+            }
+          },
+          layers: [
+            {
+              id: "osm-base",
+              type: "raster",
+              source: "osm"
+            }
+          ]
+        },
+        center: [-117.37, 33.95],
+        zoom: 10,
+        maxZoom: maxZoom
+      });
+
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      const detected = await detectSourceLayer(dataset, bbox, tileUrlTemplate, maxZoom);
+      currentSourceLayer = detected.sourceLayer;
+
+      statusEl.textContent =
+        `Detected source-layer: ${currentSourceLayer}\n` +
+        `Available layer names: ${detected.layerNames.join(", ")}\n` +
+        `Probe tile: z${detected.probeZ}/${detected.probeX}/${detected.probeY}`;
+
+      map.on("load", () => {
+        map.addSource("dataset-source", {
+          type: "vector",
+          tiles: [tileUrlTemplate],
+          minzoom: 0,
+          maxzoom: maxZoom
+        });
+
+        addThematicLayers(map, "dataset-source", currentSourceLayer);
+        updateLegend();
+
+        if (bbox && bbox.length === 4) {
+          map.fitBounds(
+            [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+            {
+              padding: { top: 40, bottom: 40, left: 400, right: 40 },
+              maxZoom: maxZoom,
+              duration: 300
+            }
+          );
+        }
+
+        map.on("mousemove", "theme-fill", e => {
+          const feature = e.features && e.features[0];
+          if (!feature) {
+            tooltipEl.style.display = "none";
+            map.getCanvas().style.cursor = "";
+            return;
+          }
+
+          const props = feature.properties || {};
+          const name =
+            props.PARK_NAME ||
+            props.park_name ||
+            props.NAME ||
+            props.name ||
+            "Feature";
+
+          const category = getCategory(props);
+          seenLegendValues.add(category);
+
+          tooltipEl.innerHTML = `
+            <strong>${name}</strong><br>
+            Category: ${category}
+          `;
+
+          tooltipEl.style.display = "block";
+          tooltipEl.style.left = (e.point.x + 14) + "px";
+          tooltipEl.style.top = (e.point.y + 14) + "px";
+          map.getCanvas().style.cursor = "pointer";
+        });
+
+        map.on("mouseleave", "theme-fill", () => {
+          tooltipEl.style.display = "none";
+          map.getCanvas().style.cursor = "";
+        });
+
+        map.on("idle", () => {
+          updateLegend();
+        });
+
+        statusEl.textContent =
+          `Ready.\n` +
+          `Detected source-layer: ${currentSourceLayer}\n` +
+          `Available layer names: ${detected.layerNames.join(", ")}`;
+      });
+
+      map.on("error", err => {
+        console.error(err);
+      });
+    }
+
+    main().catch(err => {
+      console.error(err);
+      document.getElementById("status").textContent =
+        "Failed to initialize map.\n" + err.message;
+    });
+  </script>
+</body>
+</html>
